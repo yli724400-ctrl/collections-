@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; margin: 0; display: flex; background-color: #fcfcfc; font-size: 13px; color: #444; }
+        
+        .sidebar { width: 130px; background: #f8f8f8; height: 100vh; padding: 15px 10px; border-right: 1px solid #eee; position: sticky; top: 0; }
+        .sidebar h3 { font-size: 0.85em; color: #888; margin-bottom: 10px; text-transform: uppercase; }
+        .sidebar a { display: block; padding: 4px 0; color: #333; text-decoration: none; cursor: pointer; transition: 0.2s; }
+        .sidebar a:hover { color: #000; font-weight: bold; }
+
+        .created-title { font-size: 0.75em; color: #aaa; margin-top: 20px; margin-bottom: 5px; font-weight: bold; }
+
+        .main-container { flex: 1; padding: 25px; max-width: 700px; }
+        .page { display: none; }
+        .active { display: block; }
+        h1 { font-size: 1.4em; color: #111; }
+        h2 { font-size: 1.1em; color: #222; margin-top: 20px; }
+        .card { background: #fff; padding: 20px; border-radius: 16px; border: 1px solid #eee; margin-bottom: 15px; }
+        
+        .input-group { display: flex; align-items: center; margin-bottom: 12px; }
+        .input-group label { width: 50px; font-weight: bold; color: #666; }
+        
+        .editable { 
+            flex: 1;
+            outline: none; 
+            border: 1px dashed #ccc; 
+            padding: 8px; 
+            border-radius: 8px; 
+            transition: 0.3s;
+        }
+        .editable:focus { 
+            border: 1px solid #0645ad; 
+            background-color: #f9fbff;
+        }
+
+        .save-btn { 
+            position: fixed; 
+            bottom: 30px; 
+            right: 30px; 
+            background-color: #888; 
+            color: white; 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 20px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .save-btn:hover { background-color: #666; }
+
+        .btn-group { display: flex; gap: 10px; position: fixed; bottom: 30px; right: 30px; }
+        .btn-common { padding: 10px 20px; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .delete-btn { background-color: #000; }
+        .edit-btn { background-color: #444; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar" id="sidebar">
+        <h3>Menu</h3>
+        <a onclick="showPage('home')">首頁</a>
+        <a onclick="resetEditor()">新增人物</a>
+        <a onclick="searchPerson()" style="color: #0645ad; font-weight: bold;">搜尋人物</a>
+        
+        <div class="created-title">已創建人物</div>
+        <div id="created-list"></div>
+    </div>
+
+    <div class="main-container">
+        <div id="home" class="page active">
+            <div class="card">
+                <h1>介紹小天地</h1>
+                <p>歡迎使用本網站，大家可以收錄自己喜歡的角色在這裡，祝你們看的開心，玩的愉快^^</p>
+            </div>
+        </div>
+
+        <div id="editor" class="page">
+            <div class="card">
+                <div class="input-group"><label>名字</label><div id="p-name" class="editable" contenteditable="true" data-placeholder="請輸入名字">請輸入名字</div></div>
+                <div class="input-group"><label>身分</label><div id="p-nat" class="editable" contenteditable="true" data-placeholder="請輸入身分">請輸入身分</div></div>
+                <div class="input-group"><label>生日</label><div id="p-birth" class="editable" contenteditable="true" data-placeholder="請輸入生日">請輸入生日</div></div>
+                <div class="input-group"><label>簡介</label><div id="p-desc" class="editable" contenteditable="true" data-placeholder="請輸入簡介">請輸入簡介</div></div>
+                <div class="input-group"><label>出處</label><div id="p-source" class="editable" contenteditable="true" data-placeholder="請輸入出處">請輸入出處</div></div>
+            </div>
+            <button class="save-btn" onclick="saveData()">保存人物</button>
+        </div>
+
+        <div id="viewer" class="page">
+            <div class="card">
+                <h1 id="v-name"></h1>
+                <p><strong>身分：</strong><span id="v-nat"></span></p>
+                <p><strong>生日：</strong><span id="v-birth"></span></p>
+                <p><strong>簡介：</strong><br><span id="v-desc"></span></p>
+                <p><strong>出處：</strong><span id="v-source"></span></p>
+            </div>
+            <div class="btn-group">
+                <button class="btn-common edit-btn" onclick="editPerson()">編輯</button>
+                <button class="btn-common delete-btn" onclick="deletePerson()">刪除</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentViewingIndex = -1;
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => page.style.display = 'none');
+            document.getElementById(pageId).style.display = 'block';
+        }
+
+        function searchPerson() {
+            const query = prompt("請輸入要搜尋的人物名稱：");
+            if (!query) return;
+            const people = JSON.parse(localStorage.getItem('peopleList') || '[]');
+            const index = people.findIndex(p => p.name.includes(query));
+            if (index !== -1) {
+                viewPerson(index);
+            } else {
+                alert("找不到該人物！");
+            }
+        }
+
+        function resetEditor() {
+            currentViewingIndex = -1;
+            document.getElementById('p-name').innerText = '請輸入名字';
+            document.getElementById('p-nat').innerText = '請輸入身分';
+            document.getElementById('p-birth').innerText = '請輸入生日';
+            document.getElementById('p-desc').innerText = '請輸入簡介';
+            document.getElementById('p-source').innerText = '請輸入出處';
+            showPage('editor');
+        }
+
+        document.addEventListener('focusin', function(e) {
+            if (e.target.classList.contains('editable')) {
+                if (e.target.innerText.trim() === e.target.getAttribute('data-placeholder')) {
+                    e.target.innerText = '';
+                }
+            }
+        });
+
+        document.addEventListener('focusout', function(e) {
+            if (e.target.classList.contains('editable')) {
+                if (e.target.innerText.trim() === '') {
+                    e.target.innerText = e.target.getAttribute('data-placeholder');
+                }
+            }
+        });
+
+        function saveData() {
+            let people = JSON.parse(localStorage.getItem('peopleList') || '[]');
+            const newPerson = {
+                name: document.getElementById('p-name').innerText,
+                nat: document.getElementById('p-nat').innerText,
+                birth: document.getElementById('p-birth').innerText,
+                desc: document.getElementById('p-desc').innerText,
+                source: document.getElementById('p-source').innerText
+            };
+            
+            if (currentViewingIndex === -1) {
+                people.push(newPerson);
+            } else {
+                people[currentViewingIndex] = newPerson;
+            }
+            
+            localStorage.setItem('peopleList', JSON.stringify(people));
+            renderSidebar();
+            alert("已保存！");
+            showPage('home');
+        }
+
+        function renderSidebar() {
+            const people = JSON.parse(localStorage.getItem('peopleList') || '[]');
+            const list = document.getElementById('created-list');
+            list.innerHTML = '';
+            people.forEach((person, index) => {
+                const a = document.createElement('a');
+                a.innerText = person.name;
+                a.onclick = () => viewPerson(index);
+                list.appendChild(a);
+            });
+        }
+
+        function viewPerson(index) {
+            currentViewingIndex = index;
+            const people = JSON.parse(localStorage.getItem('peopleList'));
+            const person = people[index];
+            document.getElementById('v-name').innerText = person.name;
+            document.getElementById('v-nat').innerText = person.nat;
+            document.getElementById('v-birth').innerText = person.birth;
+            document.getElementById('v-desc').innerText = person.desc;
+            document.getElementById('v-source').innerText = person.source;
+            showPage('viewer');
+        }
+
+        function editPerson() {
+            const people = JSON.parse(localStorage.getItem('peopleList'));
+            const p = people[currentViewingIndex];
+            document.getElementById('p-name').innerText = p.name;
+            document.getElementById('p-nat').innerText = p.nat;
+            document.getElementById('p-birth').innerText = p.birth;
+            document.getElementById('p-desc').innerText = p.desc;
+            document.getElementById('p-source').innerText = p.source;
+            showPage('editor');
+        }
+
+        function deletePerson() {
+            if (confirm("確定要刪除這項人物嗎？")) {
+                let people = JSON.parse(localStorage.getItem('peopleList') || '[]');
+                people.splice(currentViewingIndex, 1);
+                localStorage.setItem('peopleList', JSON.stringify(people));
+                renderSidebar();
+                showPage('home');
+            }
+        }
+
+        window.onload = renderSidebar;
+    </script>
+</body>
+</html>
